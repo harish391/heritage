@@ -1,11 +1,8 @@
-"""
-Heritage Restoration AI - FINAL Polished Version (cv2 fix, thin crack masking)
-No Streamlit warnings, perfect step status, safe restoration.
-"""
 import streamlit as st
 import numpy as np
 import cv2
 from PIL import Image
+import time
 from io import BytesIO
 import warnings
 warnings.filterwarnings('ignore')
@@ -15,296 +12,377 @@ from src.crack_segmentation import CrackSegmentationModel
 from src.texture_classification import TextureClassifier
 from src.inpainting import InpaintingGAN
 
-@st.cache_resource
-def load_models():
-    return (
-        ImageEnhancer(),
-        CrackSegmentationModel(),
-        TextureClassifier(),
-        InpaintingGAN()
-    )
-
 st.set_page_config(
     page_title="Heritage Restoration AI",
-    page_icon="🏛️",
+    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
+# Professional CSS Styling
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     * {font-family: 'Inter', sans-serif;}
-    .stApp {background: linear-gradient(135deg, #1a0033 0%, #2d0052 25%, #1a1a4d 50%, #0d0d2d 75%, #1a0033 100%);}
+    .stApp {
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #7e22ce 100%);
+    }
     #MainMenu, footer, header {visibility: hidden;}
     .stDeployButton {display: none;}
     [data-testid="stToolbar"] {display: none;}
-    .stApp::before {
-        content: '';
-        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-        background:
-            radial-gradient(600px at 20% 30%, rgba(255, 105, 180, 0.15), transparent),
-            radial-gradient(800px at 80% 60%, rgba(138, 43, 226, 0.15), transparent);
-        pointer-events: none; z-index: -1;
+    .main-header {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        padding: 2.5rem 2rem;
+        margin-bottom: 2rem;
+        text-align: center;
     }
-    [data-testid="stSidebar"] {background: linear-gradient(135deg, rgba(255, 105, 180, 0.13), rgba(138, 43, 226, 0.12)) !important; backdrop-filter: blur(20px) !important;}
-    .status-item {background: linear-gradient(135deg, rgba(255, 105, 180, 0.04), rgba(138, 43, 226, 0.06)); border: 2px solid rgba(255, 105, 180, 0.17); border-radius: 12px; padding: 1rem 1.2rem; margin: 1rem 0; transition: all 0.3s;}
-    .status-item.active {border-color: rgba(251, 191, 36, 0.8); background: linear-gradient(120deg, rgba(251, 191, 36, 0.13), rgba(251, 191, 36, 0.06)); box-shadow: 0 0 20px rgba(251, 191, 36, 0.22); animation: pulse-border 1.4s infinite;}
-    .status-item.complete {border-color: rgba(34, 197, 94, 0.55); background: linear-gradient(120deg, rgba(34, 197, 94, 0.09), rgba(34, 197, 94, 0.05));}
-    @keyframes pulse-border {0%,100%{box-shadow:0 0 20px rgba(251,191,36,0.22);}50%{box-shadow:0 0 32px rgba(251,191,36,0.29);}}
-    .status-label {font-size: 1.12rem;font-weight: 700;color: white;}
-    .status-desc {font-size: .88rem;color: rgba(255,255,255,0.60);}
-    .status-icon {font-size: 1.8rem; float: right; margin-top: -2.3rem;}
-    .header-section {background: linear-gradient(135deg, rgba(255, 105, 180, 0.07), rgba(138, 43, 226, 0.07));backdrop-filter: blur(20px); border: 2px solid rgba(255, 105, 180, 0.13); border-radius: 24px; padding: 2.1rem 1rem 2.7rem 1rem;margin-bottom:1.7rem;text-align:center;}
-    .main-title {font-size:3rem;font-weight:800;background:linear-gradient(135deg,#ff69b4,#ff1493,#da70d6,#ff69b4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin:0}
-    .subtitle{font-size:1.1rem;color:rgba(255,255,255,0.8);margin-top:0.5rem}
-    .glass-card{background:linear-gradient(135deg,rgba(255,105,180,0.08),rgba(138,43,226,0.09));backdrop-filter:blur(18px);border:1.5px solid rgba(255,105,180,0.20);border-radius:20px;padding:2rem;margin-bottom:1.1rem;box-shadow:0 7px 27px rgba(255,105,180,0.15);}
-    .section-title{font-size: 1.52rem;font-weight:700;background:linear-gradient(135deg,#ff69b4,#da70d6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;padding-bottom:.2rem;}
-    .step-card{background:linear-gradient(135deg,rgba(255,105,180,0.05),rgba(138,43,226,0.05));border:2px solid rgba(255,105,180,0.13);border-radius:14px;padding:1.3rem;margin:1rem 0;}
-    .step-card.complete{border-color:rgba(34,197,94,0.5);background:linear-gradient(135deg,rgba(34,197,94,0.10),rgba(34,197,94,0.06));}
-    .step-title{font-size:1.14rem;font-weight:600;color:#fff;}
-    .step-description{color:rgba(255,255,255,0.79);font-size:.95rem;margin-top:.22rem;}
-    .badge{display:inline-block;padding:.38rem 1rem;border-radius:50px;font-size:.9rem;font-weight:600;background:linear-gradient(135deg,rgba(255,105,180,0.2),rgba(138,43,226,0.15));border:1px solid rgba(255,105,180,0.34);color:#ff69b4;}
-    .badge.complete{background:linear-gradient(135deg,rgba(34,197,94,0.15),rgba(34,197,94,0.16));border-color:rgba(34,197,94,0.35);color:#86efac;}
-    .stButton>button{background:linear-gradient(135deg,#ff69b4,#da70d6)!important;color:white!important;border:none!important;border-radius:10px!important;padding:1rem 1.6rem!important;font-weight:600!important;font-size:1.01rem!important;box-shadow:0 6px 18px rgba(255,105,180,.16)!important;text-transform:uppercase;letter-spacing:.5px;}
-    .stButton>button:hover{background:linear-gradient(135deg,#ff1493,#da70d6)!important;box-shadow:0 11px 31px rgba(255,105,180,.23)!important;transform:translateY(-2px);}
-    .image-frame{border:2px solid rgba(255,105,180,0.22);border-radius:17px;overflow:hidden;background:rgba(0,0,0,0.25);box-shadow:0 6px 23px rgba(255,105,180,0.14);}
+    .main-title {font-size: 2.8rem; font-weight: 700; color: #fff;}
+    .main-subtitle {font-size: 1.1rem; color: rgba(255,255,255,0.7);}
+    .section-card {
+        background: rgba(255,255,255,0.08);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255,255,255,0.15);
+        border-radius: 12px;
+        padding: 1.8rem;
+        margin-bottom: 1.5rem;
+    }
+    .section-title {font-size: 1.3rem; font-weight: 600; color: #fff; margin-bottom: 1rem;}
+    .step-card {
+        background: linear-gradient(135deg,rgba(255,255,255,0.10),rgba(255,255,255,0.03));
+        border: 1px solid rgba(255,255,255,0.15);
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin: 1rem 0;
+        border-left: 4px solid #3b82f6;
+    }
+    .step-card.complete {border-left: 4px solid #10b981;}
+    .step-header {display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem;}
+    .step-title {font-size: 1.15rem; font-weight: 600; color: #fff;}
+    .step-description {color: rgba(255,255,255,0.75); font-size: 0.95rem;}
+    .step-status {display: inline-block; padding: 0.35rem 0.9rem; border-radius: 20px; font-size: 0.85rem; font-weight: 600;}
+    .status-ready {background: rgba(59,130,246,0.2); color: #93c5fd; border: 1px solid rgba(59,130,246,0.3);}
+    .status-complete {background: rgba(16,185,129,0.2); color: #fff; border: 1px solid rgba(16,185,129,0.3);}
+    .metric-box {
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 8px;
+        padding: 1.2rem;
+        text-align: center;
+    }
+    .metric-value {font-size: 2rem; font-weight: 700; color: #60a5fa; margin-bottom: 0.3rem;}
+    .metric-label {font-size: 0.9rem; color: rgba(255,255,255,0.6);}
+    .stButton > button {
+        width:100%;
+        background: linear-gradient(135deg,#3b82f6,#8b5cf6) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 8px !important;
+        padding: 0.7rem 1.5rem !important;
+        font-weight: 600 !important;
+        font-size: 0.95rem !important;
+    }
+    .image-frame {
+        border: 2px solid rgba(255,255,255,0.15);
+        border-radius: 10px;
+        overflow: hidden;
+        background: rgba(0,0,0,0.2);
+    }
+    .stDownloadButton > button {
+        background: linear-gradient(135deg,#10b981,#059669) !important;
+        width: 100%;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# -- Status session state
 if 'results' not in st.session_state:
     st.session_state.results = {}
-if 'status' not in st.session_state:
-    st.session_state.status = {'enhancement': 'pending', 'detection': 'pending', 'texture': 'pending', 'restoration': 'pending'}
-if 'run_all' not in st.session_state:
-    st.session_state.run_all = False
+    st.session_state.processing = {}
+    st.session_state.models_loaded = False
 
-enhancer, crack_detector, texture_classifier, inpainting_gan = load_models()
-
-# --- SIDEBAR ---
-with st.sidebar:
-    st.markdown("### 🚦 Processing Status")
-    steps = [
-        ("enhancement", "Enhancement", "Adjust overall quality"),
-        ("detection", "Damage Detection", "Locate cracks & flaws"),
-        ("texture", "Texture Analysis", "Classify surface"),
-        ("restoration", "Restoration", "Repair image")
-    ]
-    for key, title, desc in steps:
-        status = st.session_state.status[key]
-        classnm = "active" if status == 'active' else "complete" if status == 'complete' else ""
-        icon = "✓" if status == 'complete' else "○"
-        st.markdown(f"""
-        <div class="status-item {classnm}">
-            <div class="status-icon">{icon}</div>
-            <div class="status-label">{title}</div>
-            <div class="status-desc">{desc}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    if st.button("🔁 Reset All"):
-        st.session_state.results = {}
-        st.session_state.status = {k:'pending' for k in st.session_state.status}
-        st.session_state.run_all = False
-        st.rerun()
-
-# -- HEADER --
+# Header
 st.markdown("""
-<div class="header-section">
-    <h1 class="main-title">Heritage Restoration</h1>
-    <p class="subtitle">AI-Powered Cultural Heritage Restoration Pipeline</p>
+<div class="main-header">
+    <h1 class="main-title">Heritage Restoration AI</h1>
+    <p class="main-subtitle">Independent Step Execution • Any Order • With VISIBLE Results</p>
 </div>
 """, unsafe_allow_html=True)
 
-# --- UPLOAD ---
+# Sidebar
+with st.sidebar:
+    st.markdown("### System Controls")
+    if st.button("Clear All Results"):
+        st.session_state.results = {}
+        st.session_state.processing = {}
+        st.rerun()
+    st.markdown("---")
+    st.markdown("### Execution Status")
+    status_items = [
+        ("Enhancement", 'enhanced'),
+        ("Crack Detection", 'cracks'),
+        ("Texture Analysis", 'texture'),
+        ("Restoration", 'restored')
+    ]
+    for label, key in status_items:
+        if key in st.session_state.results:
+            st.markdown(f"✅ {label}")
+        else:
+            st.markdown(f"⚪ {label}")
+    st.markdown("---")
+    st.markdown("### About")
+    st.markdown("""
+    - Execute any processing step independently
+    - No execution order required
+    - Run steps multiple times
+    - Mix and match as needed
+    """)
+
 col_upload, col_info = st.columns([2, 1])
 with col_upload:
-    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">Upload Image</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Image Upload</div>', unsafe_allow_html=True)
     uploaded_file = st.file_uploader(
-        "Upload your artifact image", type=['jpg','jpeg','png'],
-        label_visibility="collapsed"
+        "Select heritage artifact image", type=['jpg', 'jpeg', 'png'],
+        help="Upload a high-resolution image", label_visibility="collapsed"
     )
     if uploaded_file:
-        img = Image.open(uploaded_file)
-        img_arr = np.array(img)
-        st.session_state.original_image = img_arr
+        image = Image.open(uploaded_file)
+        img_array = np.array(image)
+        st.session_state.original_image = img_array
         st.markdown('<div class="image-frame">', unsafe_allow_html=True)
-        st.image(img, width="stretch")
+        st.image(image, use_column_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 with col_info:
     if uploaded_file:
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title" style="font-size:1.2rem;">Info</div>', unsafe_allow_html=True)
-        h, w = img_arr.shape[:2]
-        st.markdown(f"**Resolution:** {w}×{h}")
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Image Properties</div>', unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class="metric-box">
+            <div class="metric-value">{img_array.shape[1]} × {img_array.shape[0]}</div>
+            <div class="metric-label">Resolution</div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        size_mb = uploaded_file.size / (1024 * 1024)
+        st.markdown(f"""
+        <div class="metric-box">
+            <div class="metric-value">{size_mb:.2f} MB</div>
+            <div class="metric-label">File Size</div>
+        </div>
+        """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-# Pipeline logic
-def run_full_pipeline():
-    st.session_state.status = {k: 'pending' for k in st.session_state.status}
-
-    st.session_state.status['enhancement'] = 'active'
-    enhanced = enhancer.enhance_pipeline(st.session_state.original_image)
-    st.session_state.results['enhanced'] = enhanced
-    st.session_state.status['enhancement'] = 'complete'
-
-    st.session_state.status['detection'] = 'active'
-    cracks = crack_detector.predict(enhanced)
-    st.session_state.results['cracks'] = cracks
-    st.session_state.status['detection'] = 'complete'
-
-    st.session_state.status['texture'] = 'active'
-    st.session_state.results['texture'] = texture_classifier.predict(enhanced)
-    st.session_state.status['texture'] = 'complete'
-
-    st.session_state.status['restoration'] = 'active'
-    base = enhanced
-    mask = cracks
-    mask_bin = cv2.threshold(mask, 80, 255, cv2.THRESH_BINARY)[1]
-    mask_thin = cv2.dilate(mask_bin, np.ones((2,2), np.uint8), iterations=1)
-    mask_thin = cv2.erode(mask_thin, np.ones((3,3), np.uint8), iterations=2)
-    if np.sum(mask_thin) > 0:
-        try:
-            import cv2.ximgproc
-            mask_thin = cv2.ximgproc.thinning(mask_thin)
-        except Exception:
-            pass
-        restored = inpainting_gan.inpaint(base, mask_thin)
-        out = base.copy()
-        for c in range(3):
-            out[:,:,c] = np.where(mask_thin==0, base[:,:,c], restored[:,:,c])
-        st.session_state.results['restored'] = out
-    else:
-        st.session_state.results['restored'] = base
-    st.session_state.status['restoration'] = 'complete'
-
-    st.session_state.run_all = False
-    st.rerun()
-
+# Processing Pipeline
 if uploaded_file:
-    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">Pipeline</div>', unsafe_allow_html=True)
+    if not st.session_state.models_loaded:
+        with st.spinner("Loading AI models..."):
+            st.session_state.enhancer = ImageEnhancer()
+            st.session_state.crack_detector = CrackSegmentationModel()
+            st.session_state.texture_classifier = TextureClassifier()
+            st.session_state.inpainting_gan = InpaintingGAN()
+            st.session_state.models_loaded = True
 
-    runall = st.button("🚀 Run Full Restoration Pipeline", type="primary")
-    if runall:
-        st.session_state.run_all = True
-        run_full_pipeline()
-
-    # Step 1: Enhancement
-    col1, col2 = st.columns([4, 1])
-    with col1:
-        st.markdown(f"""
-        <div class="step-card {'complete' if 'enhanced' in st.session_state.results else ''}">
-        <div class="step-title">Enhancement</div>
-        <div class="step-description">Brightness, contrast, sharpness</div>
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Processing Pipeline - Independent Execution</div>', unsafe_allow_html=True)
+    
+    # Enhancement
+    status_class = 'complete' if 'enhanced' in st.session_state.results else ''
+    st.markdown(f"""
+    <div class="step-card {status_class}">
+        <div class="step-header">
+            <div class="step-title">Step 1: Image Enhancement</div>
+            <span class="step-status status-{'complete' if 'enhanced' in st.session_state.results else 'ready'}">
+                {'Complete' if 'enhanced' in st.session_state.results else 'Ready'}
+            </span>
         </div>
-        """, unsafe_allow_html=True)
+        <div class="step-description">
+            Brightness boost, contrast enhancement, color saturation, and sharpening.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    col1, col2 = st.columns([3, 1])
     with col2:
-        if st.button("Run", key="enh", use_container_width=True):
-            st.session_state.status['enhancement'] = 'active'
-            st.session_state.results['enhanced'] = enhancer.enhance_pipeline(st.session_state.original_image)
-            st.session_state.status['enhancement'] = 'complete'
-            st.rerun()
+        if st.button("Execute", key="btn_enhance"):
+            with st.spinner("Enhancing..."):
+                st.session_state.results['enhanced'] = st.session_state.enhancer.enhance_pipeline(
+                    st.session_state.original_image
+                )
+                time.sleep(0.3)
+                st.rerun()
     if 'enhanced' in st.session_state.results:
-        c1, c2 = st.columns(2)
-        with c1: st.image(st.session_state.original_image, width="stretch")
-        with c2: st.image(st.session_state.results['enhanced'], width="stretch")
-    st.markdown("")
+        st.markdown("**Enhanced Result:**")
+        st.image(st.session_state.results['enhanced'], use_container_width=True)
 
-    # Step 2: Crack Detection
-    col1, col2 = st.columns([4, 1])
-    with col1:
-        st.markdown(f"""
-        <div class="step-card {'complete' if 'cracks' in st.session_state.results else ''}">
-        <div class="step-title">Damage Detection</div>
-        <div class="step-description">Find cracks and flaws</div>
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Crack Detection
+    status_class = 'complete' if 'cracks' in st.session_state.results else ''
+    st.markdown(f"""
+    <div class="step-card {status_class}">
+        <div class="step-header">
+            <div class="step-title">Step 2: Damage Detection</div>
+            <span class="step-status status-{'complete' if 'cracks' in st.session_state.results else 'ready'}">
+                {'Complete' if 'cracks' in st.session_state.results else 'Ready'}
+            </span>
         </div>
-        """, unsafe_allow_html=True)
+        <div class="step-description">
+            Multi-method edge detection to identify cracks, fractures, and damage.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        use_enhanced = st.checkbox("Use enhanced image if available", value=True, key="crack_use_enh")
     with col2:
-        if st.button("Run", key="crack", use_container_width=True):
-            st.session_state.status['detection'] = 'active'
-            inp = st.session_state.results.get('enhanced', st.session_state.original_image)
-            st.session_state.results['cracks'] = crack_detector.predict(inp)
-            st.session_state.status['detection'] = 'complete'
-            st.rerun()
+        if st.button("Execute", key="btn_crack"):
+            with st.spinner("Detecting damage..."):
+                if use_enhanced and 'enhanced' in st.session_state.results:
+                    input_img = st.session_state.results['enhanced']
+                else:
+                    input_img = st.session_state.original_image
+                st.session_state.results['cracks'] = st.session_state.crack_detector.predict(input_img)
+                time.sleep(0.3)
+                st.rerun()
     if 'cracks' in st.session_state.results:
-        vis = cv2.applyColorMap(st.session_state.results['cracks'], cv2.COLORMAP_INFERNO)
-        vis = cv2.cvtColor(vis, cv2.COLOR_BGR2RGB)
-        st.image(vis, width="stretch")
-    st.markdown("")
+        st.markdown("**Damage Heatmap:**")
+        crack_vis = cv2.applyColorMap(st.session_state.results['cracks'], cv2.COLORMAP_INFERNO)
+        crack_vis = cv2.cvtColor(crack_vis, cv2.COLOR_BGR2RGB)
+        st.image(crack_vis, use_container_width=True)
 
-    # Step 3: Texture
-    col1, col2 = st.columns([4, 1])
-    with col1:
-        st.markdown(f"""
-        <div class="step-card {'complete' if 'texture' in st.session_state.results else ''}">
-        <div class="step-title">Texture Analysis</div>
-        <div class="step-description">Material classification</div>
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Texture
+    status_class = 'complete' if 'texture' in st.session_state.results else ''
+    st.markdown(f"""
+    <div class="step-card {status_class}">
+        <div class="step-header">
+            <div class="step-title">Step 3: Material Analysis</div>
+            <span class="step-status status-{'complete' if 'texture' in st.session_state.results else 'ready'}">
+                {'Complete' if 'texture' in st.session_state.results else 'Ready'}
+            </span>
         </div>
-        """, unsafe_allow_html=True)
+        <div class="step-description">
+            Real-time texture classification based on image features.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        use_enhanced_tex = st.checkbox("Use enhanced image if available", value=True, key="tex_use_enh")
     with col2:
-        if st.button("Run", key="tex", use_container_width=True):
-            st.session_state.status['texture'] = 'active'
-            inp = st.session_state.results.get('enhanced', st.session_state.original_image)
-            st.session_state.results['texture'] = texture_classifier.predict(inp)
-            st.session_state.status['texture'] = 'complete'
-            st.rerun()
+        if st.button("Execute", key="btn_texture"):
+            with st.spinner("Analyzing..."):
+                if use_enhanced_tex and 'enhanced' in st.session_state.results:
+                    input_img = st.session_state.results['enhanced']
+                else:
+                    input_img = st.session_state.original_image
+                st.session_state.results['texture'] = st.session_state.texture_classifier.predict(input_img)
+                time.sleep(0.3)
+                st.rerun()
     if 'texture' in st.session_state.results:
-        c1, c2 = st.columns(2)
-        with c1: st.metric("Type", st.session_state.results['texture']['class'].title())
-        with c2: st.metric("Confidence", f"{st.session_state.results['texture']['confidence']:.0%}")
-    st.markdown("")
+        result = st.session_state.results['texture']
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Material Type", result['class'].title())
+        with col2:
+            st.metric("Confidence", f"{result['confidence']:.1%}")
 
-    # Step 4: Restoration (only restore crack pixels)
-    col1, col2 = st.columns([4, 1])
-    with col1:
-        st.markdown(f"""
-        <div class="step-card {'complete' if 'restored' in st.session_state.results else ''}">
-        <div class="step-title">Restoration</div>
-        <div class="step-description">Repair cracked regions</div>
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Restoration
+    status_class = 'complete' if 'restored' in st.session_state.results else ''
+    st.markdown(f"""
+    <div class="step-card {status_class}">
+        <div class="step-header">
+            <div class="step-title">Step 4: Intelligent Restoration</div>
+            <span class="step-status status-{'complete' if 'restored' in st.session_state.results else 'ready'}">
+                {'Complete' if 'restored' in st.session_state.results else 'Ready'}
+            </span>
         </div>
-        """, unsafe_allow_html=True)
+        <div class="step-description">
+            Inpainting and restoration of damaged regions with enhanced brightness.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        restore_use_enh = st.checkbox("Use enhanced for base", value=True, key="rest_use_enh")
+        restore_use_crack = st.checkbox("Use crack mask if available", value=True, key="rest_use_crack")
     with col2:
-        if st.button("Run", key="rest", use_container_width=True):
-            st.session_state.status['restoration'] = 'active'
-            base = st.session_state.results.get('enhanced', st.session_state.original_image)
-            mask = st.session_state.results.get('cracks', np.zeros(base.shape[:2], dtype=np.uint8))
-            mask_bin = cv2.threshold(mask, 80, 255, cv2.THRESH_BINARY)[1]
-            mask_thin = cv2.dilate(mask_bin, np.ones((2,2), np.uint8), iterations=1)
-            mask_thin = cv2.erode(mask_thin, np.ones((3,3), np.uint8), iterations=2)
-            if np.sum(mask_thin) > 0:
-                try:
-                    import cv2.ximgproc
-                    mask_thin = cv2.ximgproc.thinning(mask_thin)
-                except Exception:
-                    pass
-                restored = inpainting_gan.inpaint(base, mask_thin)
-                out = base.copy()
-                for c in range(3):
-                    out[:,:,c] = np.where(mask_thin==0, base[:,:,c], restored[:,:,c])
-                st.session_state.results['restored'] = out
-            else:
-                st.session_state.results['restored'] = base
-            st.session_state.status['restoration'] = 'complete'
-            st.rerun()
+        if st.button("Execute", key="btn_restore"):
+            with st.spinner("Restoring..."):
+                if restore_use_enh and 'enhanced' in st.session_state.results:
+                    base_img = st.session_state.results['enhanced']
+                else:
+                    base_img = st.session_state.original_image
+
+                if restore_use_crack and 'cracks' in st.session_state.results:
+                    mask = st.session_state.results['cracks']
+                else:
+                    mask = np.zeros(base_img.shape[:2], dtype=np.uint8)
+
+                st.session_state.results['restored'] = st.session_state.inpainting_gan.inpaint(base_img, mask)
+                time.sleep(0.3)
+                st.rerun()
     if 'restored' in st.session_state.results:
-        st.image(st.session_state.results['restored'], width="stretch")
-        pil = Image.fromarray(st.session_state.results['restored'])
+        st.markdown("**Restored Result:**")
+        st.image(st.session_state.results['restored'], use_container_width=True)
+        restored_pil = Image.fromarray(st.session_state.results['restored'])
         buf = BytesIO()
-        pil.save(buf, format="PNG")
-        st.download_button("Download", buf.getvalue(), "restored.png", "image/png")
+        restored_pil.save(buf, format="PNG")
+        st.download_button(
+            label="Download Restored Image",
+            data=buf.getvalue(),
+            file_name="restored_heritage.png",
+            mime="image/png"
+        )
+
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Comparison
-    if 'restored' in st.session_state.results:
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">Comparison</div>', unsafe_allow_html=True)
-        c1, c2, c3 = st.columns(3)
-        with c1: st.image(st.session_state.original_image, width="stretch"); st.caption("Original")
-        with c2: st.image(st.session_state.results['enhanced'], width="stretch"); st.caption("Enhanced")
-        with c3: st.image(st.session_state.results['restored'], width="stretch"); st.caption("Restored")
+    # Full Comparison
+    if 'enhanced' in st.session_state.results or 'restored' in st.session_state.results:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Full Comparison View</div>', unsafe_allow_html=True)
+        if 'enhanced' in st.session_state.results and 'restored' in st.session_state.results:
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.markdown("**Original**")
+                st.image(st.session_state.original_image, use_container_width=True)
+            with col2:
+                st.markdown("**Enhanced**")
+                st.image(st.session_state.results['enhanced'], use_container_width=True)
+            with col3:
+                st.markdown("**Restored**")
+                st.image(st.session_state.results['restored'], use_container_width=True)
+        elif 'enhanced' in st.session_state.results:
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("**Original**")
+                st.image(st.session_state.original_image, use_container_width=True)
+            with col2:
+                st.markdown("**Enhanced**")
+                st.image(st.session_state.results['enhanced'], use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
+
+    # --- NEW FINAL PROCESSING STAGE CARD ---
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Step 5: Processing Stage (Final Output & Download)</div>', unsafe_allow_html=True)
+    if 'restored' in st.session_state.results:
+        st.markdown("**Final Restored Image (Download or Review):**")
+        st.image(st.session_state.results['restored'], use_container_width=True)
+        pil_final = Image.fromarray(st.session_state.results['restored'])
+        buf_final = BytesIO()
+        pil_final.save(buf_final, format="PNG")
+        st.download_button(
+            label="Download Final Restored Image",
+            data=buf_final.getvalue(),
+            file_name="final_restored_heritage.png",
+            mime="image/png"
+        )
+    else:
+        st.info("Process the restoration to get your final result ready for download.")
+    st.markdown('</div>', unsafe_allow_html=True)
