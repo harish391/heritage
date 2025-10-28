@@ -1,565 +1,533 @@
 """
-🏛️ Heritage Restoration AI - Ultra Modern Web UI
-Glassmorphic design with smooth animations and step-by-step visualization
+Heritage Restoration AI - Professional Web Interface
+Advanced Cultural Heritage Preservation System
 """
 import streamlit as st
 import numpy as np
 import cv2
 from PIL import Image
 import time
-import base64
 from io import BytesIO
+import warnings
+warnings.filterwarnings('ignore')
 
 from src.image_enhancement import ImageEnhancer
 from src.crack_segmentation import CrackSegmentationModel
 from src.texture_classification import TextureClassifier
 from src.inpainting import InpaintingGAN
 
-# Page config
+# Page Configuration
 st.set_page_config(
-    page_title="🏛️ Heritage AI",
-    page_icon="🏛️",
+    page_title="Heritage Restoration AI",
+    page_icon="⚡",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
-# Modern CSS with glassmorphism
+# Professional CSS Styling
 st.markdown("""
 <style>
-    /* Global Styles */
-    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    
+    * {
+        font-family: 'Inter', sans-serif;
+    }
     
     .stApp {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        font-family: 'Poppins', sans-serif;
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #7e22ce 100%);
     }
     
-    /* Hide Streamlit branding */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
+    /* Hide all Streamlit elements */
+    #MainMenu, footer, header {visibility: hidden;}
+    .stDeployButton {display: none;}
+    [data-testid="stToolbar"] {display: none;}
     
-    /* Custom Header */
-    .hero-section {
-        text-align: center;
-        padding: 3rem 1rem;
-        background: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(10px);
-        border-radius: 30px;
-        margin: 2rem auto;
-        max-width: 900px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    }
+    /* Hide deprecation warnings */
+    .stAlert {display: none;}
     
-    .hero-title {
-        font-size: 3.5rem;
-        font-weight: 700;
-        background: linear-gradient(45deg, #fff, #00f2fe);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin-bottom: 1rem;
-        animation: fadeInDown 0.8s ease-out;
-    }
-    
-    .hero-subtitle {
-        font-size: 1.3rem;
-        color: rgba(255, 255, 255, 0.9);
-        font-weight: 300;
-        animation: fadeInUp 0.8s ease-out;
-    }
-    
-    /* Glass Cards */
-    .glass-card {
-        background: rgba(255, 255, 255, 0.1);
+    /* Header */
+    .main-header {
+        background: rgba(255, 255, 255, 0.05);
         backdrop-filter: blur(20px);
-        border-radius: 25px;
-        padding: 2rem;
-        margin: 1.5rem 0;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        transition: all 0.3s ease;
-        animation: fadeIn 0.6s ease-out;
-    }
-    
-    .glass-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
-        border: 1px solid rgba(255, 255, 255, 0.3);
-    }
-    
-    /* Upload Zone */
-    .upload-zone {
-        background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
-        backdrop-filter: blur(10px);
-        border: 3px dashed rgba(255, 255, 255, 0.3);
-        border-radius: 20px;
-        padding: 3rem;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        padding: 2.5rem 2rem;
+        margin-bottom: 2rem;
         text-align: center;
-        transition: all 0.3s ease;
-        cursor: pointer;
     }
     
-    .upload-zone:hover {
-        border-color: #00f2fe;
-        background: rgba(0, 242, 254, 0.1);
-        transform: scale(1.02);
+    .main-title {
+        font-size: 2.8rem;
+        font-weight: 700;
+        color: #ffffff;
+        margin: 0 0 0.5rem 0;
+        letter-spacing: -0.5px;
+    }
+    
+    .main-subtitle {
+        font-size: 1.1rem;
+        color: rgba(255, 255, 255, 0.7);
+        font-weight: 400;
+    }
+    
+    /* Section Cards */
+    .section-card {
+        background: rgba(255, 255, 255, 0.08);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 12px;
+        padding: 1.8rem;
+        margin-bottom: 1.5rem;
+        transition: all 0.3s ease;
+    }
+    
+    .section-card:hover {
+        background: rgba(255, 255, 255, 0.12);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+    }
+    
+    .section-title {
+        font-size: 1.3rem;
+        font-weight: 600;
+        color: #ffffff;
+        margin-bottom: 1rem;
+        padding-bottom: 0.8rem;
+        border-bottom: 2px solid rgba(255, 255, 255, 0.1);
     }
     
     /* Step Cards */
     .step-card {
-        background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.05));
-        backdrop-filter: blur(15px);
-        border-radius: 20px;
+        background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 10px;
         padding: 1.5rem;
         margin: 1rem 0;
-        border-left: 4px solid;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
         transition: all 0.3s ease;
     }
     
-    .step-card.active {
-        border-left-color: #00f2fe;
-        background: linear-gradient(135deg, rgba(0,242,254,0.2), rgba(0,242,254,0.05));
-        animation: pulse 2s infinite;
+    .step-card.enabled {
+        border-left: 4px solid #3b82f6;
+    }
+    
+    .step-card.processing {
+        border-left: 4px solid #fbbf24;
+        background: linear-gradient(135deg, rgba(251,191,36,0.15), rgba(251,191,36,0.05));
     }
     
     .step-card.complete {
-        border-left-color: #4ade80;
-        background: linear-gradient(135deg, rgba(74,222,128,0.2), rgba(74,222,128,0.05));
+        border-left: 4px solid #10b981;
+        background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(16,185,129,0.05));
     }
     
-    .step-card.pending {
-        border-left-color: rgba(255,255,255,0.3);
-        opacity: 0.6;
-    }
-    
-    /* Step Title */
-    .step-title {
-        font-size: 1.4rem;
-        font-weight: 600;
-        color: white;
-        margin-bottom: 0.5rem;
+    .step-header {
         display: flex;
+        justify-content: space-between;
         align-items: center;
-        gap: 0.8rem;
+        margin-bottom: 0.8rem;
     }
     
-    .step-icon {
-        font-size: 1.8rem;
-        filter: drop-shadow(0 0 10px rgba(255,255,255,0.5));
+    .step-title {
+        font-size: 1.15rem;
+        font-weight: 600;
+        color: #ffffff;
     }
     
     .step-description {
-        color: rgba(255, 255, 255, 0.8);
-        font-size: 1rem;
+        color: rgba(255, 255, 255, 0.75);
+        font-size: 0.95rem;
         line-height: 1.6;
         margin-bottom: 1rem;
     }
     
-    /* Progress Bar */
-    .progress-container {
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 50px;
-        height: 10px;
-        overflow: hidden;
-        margin: 1rem 0;
-    }
-    
-    .progress-bar {
-        height: 100%;
-        background: linear-gradient(90deg, #00f2fe, #4ade80);
-        border-radius: 50px;
-        transition: width 0.5s ease;
-        box-shadow: 0 0 20px rgba(0,242,254,0.5);
-    }
-    
-    /* Status Badge */
-    .status-badge {
+    .step-status {
         display: inline-block;
-        padding: 0.4rem 1rem;
-        border-radius: 50px;
-        font-size: 0.9rem;
+        padding: 0.35rem 0.9rem;
+        border-radius: 20px;
+        font-size: 0.85rem;
         font-weight: 600;
-        margin: 0.5rem 0;
+    }
+    
+    .status-ready {
+        background: rgba(59, 130, 246, 0.2);
+        color: #93c5fd;
+        border: 1px solid rgba(59, 130, 246, 0.3);
     }
     
     .status-processing {
-        background: linear-gradient(135deg, #00f2fe, #0080ff);
-        color: white;
-        animation: pulse 1.5s infinite;
+        background: rgba(251, 191, 36, 0.2);
+        color: #fde68a;
+        border: 1px solid rgba(251, 191, 36, 0.3);
     }
     
     .status-complete {
-        background: linear-gradient(135deg, #4ade80, #22c55e);
-        color: white;
-    }
-    
-    .status-pending {
-        background: rgba(255, 255, 255, 0.2);
-        color: rgba(255, 255, 255, 0.7);
+        background: rgba(16, 185, 129, 0.2);
+        color: #6ee7b7;
+        border: 1px solid rgba(16, 185, 129, 0.3);
     }
     
     /* Metrics */
-    .metric-card {
-        background: linear-gradient(135deg, rgba(0,242,254,0.15), rgba(0,242,254,0.05));
-        backdrop-filter: blur(10px);
-        border-radius: 15px;
-        padding: 1.5rem;
+    .metric-box {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 1.2rem;
         text-align: center;
-        border: 1px solid rgba(0,242,254,0.3);
-        transition: all 0.3s ease;
-    }
-    
-    .metric-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 30px rgba(0,242,254,0.3);
     }
     
     .metric-value {
-        font-size: 2.5rem;
+        font-size: 2rem;
         font-weight: 700;
-        color: #00f2fe;
-        text-shadow: 0 0 20px rgba(0,242,254,0.5);
+        color: #60a5fa;
+        margin-bottom: 0.3rem;
     }
     
     .metric-label {
-        font-size: 1rem;
-        color: rgba(255, 255, 255, 0.8);
-        margin-top: 0.5rem;
+        font-size: 0.9rem;
+        color: rgba(255, 255, 255, 0.6);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
     
-    /* Animations */
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    
-    @keyframes fadeInDown {
-        from { opacity: 0; transform: translateY(-30px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    
-    @keyframes fadeInUp {
-        from { opacity: 0; transform: translateY(30px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.8; }
-    }
-    
-    /* Button Styles */
+    /* Buttons */
     .stButton > button {
-        background: linear-gradient(135deg, #00f2fe, #4ade80) !important;
+        width: 100%;
+        background: linear-gradient(135deg, #3b82f6, #8b5cf6) !important;
         color: white !important;
         border: none !important;
-        border-radius: 50px !important;
-        padding: 0.8rem 2.5rem !important;
+        border-radius: 8px !important;
+        padding: 0.7rem 1.5rem !important;
         font-weight: 600 !important;
-        font-size: 1.1rem !important;
+        font-size: 0.95rem !important;
         transition: all 0.3s ease !important;
-        box-shadow: 0 4px 20px rgba(0,242,254,0.4) !important;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: 0.5px;
     }
     
     .stButton > button:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 6px 30px rgba(0,242,254,0.6) !important;
+        background: linear-gradient(135deg, #2563eb, #7c3aed) !important;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4) !important;
     }
     
-    /* Image containers */
-    .image-container {
-        border-radius: 20px;
+    .stButton > button:disabled {
+        background: rgba(255, 255, 255, 0.1) !important;
+        color: rgba(255, 255, 255, 0.3) !important;
+        cursor: not-allowed !important;
+    }
+    
+    /* Image Container */
+    .image-frame {
+        border: 2px solid rgba(255, 255, 255, 0.15);
+        border-radius: 10px;
         overflow: hidden;
-        border: 2px solid rgba(255, 255, 255, 0.2);
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-        transition: all 0.3s ease;
+        background: rgba(0, 0, 0, 0.2);
     }
     
-    .image-container:hover {
-        transform: scale(1.02);
-        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
-    }
-    
-    /* Download button */
+    /* Download Button */
     .stDownloadButton > button {
-        background: linear-gradient(135deg, #ff006e, #ff4d8d) !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 50px !important;
-        padding: 0.8rem 2rem !important;
-        font-weight: 600 !important;
-        transition: all 0.3s ease !important;
+        background: linear-gradient(135deg, #10b981, #059669) !important;
+        width: 100%;
+    }
+    
+    .stDownloadButton > button:hover {
+        background: linear-gradient(135deg, #059669, #047857) !important;
+    }
+    
+    /* Hide file uploader details */
+    .uploadedFile {
+        display: none;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Hero Section
-st.markdown("""
-<div class="hero-section">
-    <div class="hero-title">🏛️ Heritage AI Restoration</div>
-    <div class="hero-subtitle">
-        Advanced AI-Powered Cultural Heritage Preservation<br>
-        ✨ Modern • Interactive • Beautiful Visualizations
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-# Initialize session state
-if 'processed' not in st.session_state:
-    st.session_state.processed = False
-    st.session_state.step = 0
+# Initialize Session State
+if 'step_status' not in st.session_state:
+    st.session_state.step_status = {
+        'enhancement': 'ready',
+        'crack_detection': 'ready',
+        'texture_analysis': 'ready',
+        'restoration': 'ready'
+    }
     st.session_state.results = {}
     st.session_state.models_loaded = False
 
-# Upload Section
-st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-st.markdown("### 📤 Upload Your Heritage Artifact")
+# Header
+st.markdown("""
+<div class="main-header">
+    <h1 class="main-title">Heritage Restoration AI</h1>
+    <p class="main-subtitle">Professional Cultural Heritage Preservation System</p>
+</div>
+""", unsafe_allow_html=True)
 
-uploaded_file = st.file_uploader(
-    "Drag and drop or click to browse",
-    type=['jpg', 'jpeg', 'png'],
-    help="Upload a high-quality image of your heritage artifact"
-)
+# Sidebar - Controls
+with st.sidebar:
+    st.markdown("### System Controls")
+    
+    if st.button("Reset All Steps"):
+        st.session_state.step_status = {
+            'enhancement': 'ready',
+            'crack_detection': 'ready',
+            'texture_analysis': 'ready',
+            'restoration': 'ready'
+        }
+        st.session_state.results = {}
+        st.rerun()
+    
+    st.markdown("---")
+    st.markdown("### About")
+    st.markdown("""
+    This system uses advanced AI algorithms for:
+    - Image quality enhancement
+    - Damage detection
+    - Material analysis
+    - Intelligent restoration
+    """)
+    
+    st.markdown("---")
+    st.markdown("**Version:** 2.0  \n**Status:** Active")
 
-if uploaded_file:
-    image = Image.open(uploaded_file)
-    img_array = np.array(image)
+# Main Content
+col_upload, col_info = st.columns([2, 1])
+
+with col_upload:
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Image Upload</div>', unsafe_allow_html=True)
     
-    col1, col2 = st.columns([1, 1], gap="large")
+    uploaded_file = st.file_uploader(
+        "Select heritage artifact image",
+        type=['jpg', 'jpeg', 'png'],
+        help="Upload a high-resolution image for best results",
+        label_visibility="collapsed"
+    )
     
-    with col1:
-        st.markdown('<div class="image-container">', unsafe_allow_html=True)
-        st.image(image, use_column_width=True)
+    if uploaded_file:
+        image = Image.open(uploaded_file)
+        img_array = np.array(image)
+        st.markdown('<div class="image-frame">', unsafe_allow_html=True)
+        st.image(image, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
     
-    with col2:
-        st.markdown("#### 📊 Image Information")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+with col_info:
+    if uploaded_file:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Image Properties</div>', unsafe_allow_html=True)
         
-        # Metrics
-        metrics_col1, metrics_col2, metrics_col3 = st.columns(3)
-        
-        with metrics_col1:
-            st.markdown(f"""
-            <div class="metric-card">
-                <div class="metric-value">{img_array.shape[1]}</div>
-                <div class="metric-label">Width (px)</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with metrics_col2:
-            st.markdown(f"""
-            <div class="metric-card">
-                <div class="metric-value">{img_array.shape[0]}</div>
-                <div class="metric-label">Height (px)</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with metrics_col3:
-            size_mb = uploaded_file.size / (1024 * 1024)
-            st.markdown(f"""
-            <div class="metric-card">
-                <div class="metric-value">{size_mb:.2f}</div>
-                <div class="metric-label">Size (MB)</div>
-            </div>
-            """, unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class="metric-box">
+            <div class="metric-value">{img_array.shape[1]} × {img_array.shape[0]}</div>
+            <div class="metric-label">Resolution</div>
+        </div>
+        """, unsafe_allow_html=True)
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        if st.button("⚡ START RESTORATION PIPELINE"):
-            st.session_state.processed = True
-            st.session_state.step = 0
-            st.session_state.results = {}
-            st.rerun()
-
-st.markdown('</div>', unsafe_allow_html=True)
+        size_mb = uploaded_file.size / (1024 * 1024)
+        st.markdown(f"""
+        <div class="metric-box">
+            <div class="metric-value">{size_mb:.2f} MB</div>
+            <div class="metric-label">File Size</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # Processing Pipeline
-if uploaded_file and st.session_state.processed:
+if uploaded_file:
     
-    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    st.markdown("### 🔄 AI Processing Pipeline")
-    
-    # Initialize models once
+    # Load models
     if not st.session_state.models_loaded:
-        with st.spinner("🤖 Loading AI models..."):
+        with st.spinner("Loading AI models..."):
             st.session_state.enhancer = ImageEnhancer()
             st.session_state.crack_detector = CrackSegmentationModel()
             st.session_state.texture_classifier = TextureClassifier()
             st.session_state.inpainting_gan = InpaintingGAN()
             st.session_state.models_loaded = True
-            time.sleep(1)
     
-    # Steps definition
-    steps = [
-        {
-            "icon": "🎨",
-            "title": "Image Enhancement",
-            "description": "Applying CLAHE contrast enhancement, bilateral filtering for noise reduction, and unsharp masking for edge sharpening to improve overall image quality."
-        },
-        {
-            "icon": "🔍",
-            "title": "Crack Detection",
-            "description": "Using advanced U-Net based edge detection algorithm to identify and segment damaged regions, structural cracks, and areas requiring restoration."
-        },
-        {
-            "icon": "🧱",
-            "title": "Texture Analysis",
-            "description": "Classifying surface texture patterns and material types using deep learning with ResNet50 architecture for accurate restoration planning."
-        },
-        {
-            "icon": "✨",
-            "title": "Restoration & Inpainting",
-            "description": "Intelligently reconstructing damaged regions using OpenCV Telea inpainting algorithm for seamless and authentic restoration results."
-        }
-    ]
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Processing Pipeline</div>', unsafe_allow_html=True)
     
-    # Display all steps with status
-    for idx, step_info in enumerate(steps):
-        status = "complete" if idx < st.session_state.step else ("active" if idx == st.session_state.step else "pending")
-        
-        st.markdown(f"""
-        <div class="step-card {status}">
-            <div class="step-title">
-                <span class="step-icon">{step_info['icon']}</span>
-                <span>Step {idx + 1}: {step_info['title']}</span>
-            </div>
-            <div class="step-description">{step_info['description']}</div>
-            <span class="status-badge status-{status}">
-                {'✓ Complete' if status == 'complete' else ('⚡ Processing...' if status == 'active' else '○ Pending')}
+    # Step 1: Enhancement
+    st.markdown(f"""
+    <div class="step-card {st.session_state.step_status['enhancement']}">
+        <div class="step-header">
+            <div class="step-title">Step 1: Image Enhancement</div>
+            <span class="step-status status-{st.session_state.step_status['enhancement']}">
+                {st.session_state.step_status['enhancement'].title()}
             </span>
         </div>
-        """, unsafe_allow_html=True)
+        <div class="step-description">
+            Applies CLAHE contrast enhancement, bilateral noise filtering, and unsharp masking 
+            to improve overall image quality and reveal hidden details.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Process current step
-    if st.session_state.step < len(steps):
-        idx = st.session_state.step
-        step_info = steps[idx]
-        
-        with st.spinner(f"⚡ Processing {step_info['title']}..."):
-            time.sleep(0.8)  # Visual effect
-            
-            if idx == 0:  # Enhancement
-                st.session_state.results['enhanced'] = st.session_state.enhancer.enhance_pipeline(img_array)
-                st.markdown("#### ✨ Enhanced Result")
-                st.image(st.session_state.results['enhanced'], use_column_width=True)
-            
-            elif idx == 1:  # Crack Detection
-                if 'enhanced' in st.session_state.results:
-                    st.session_state.results['cracks'] = st.session_state.crack_detector.predict(st.session_state.results['enhanced'])
-                    crack_vis = cv2.applyColorMap(st.session_state.results['cracks'], cv2.COLORMAP_INFERNO)
-                    crack_vis = cv2.cvtColor(crack_vis, cv2.COLOR_BGR2RGB)
-                    st.markdown("#### 🔥 Crack Detection Heatmap")
-                    st.image(crack_vis, use_column_width=True)
-                    num_cracks = np.count_nonzero(st.session_state.results['cracks'] > 50)
-                    st.metric("Detected Damage Pixels", f"{num_cracks:,}")
-            
-            elif idx == 2:  # Texture
-                if 'enhanced' in st.session_state.results:
-                    st.session_state.results['texture'] = st.session_state.texture_classifier.predict(st.session_state.results['enhanced'])
-                    st.markdown("#### 🧱 Texture Analysis Results")
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.metric("Texture Type", st.session_state.results['texture']['class'].title())
-                    with col2:
-                        st.metric("Confidence Score", f"{st.session_state.results['texture']['confidence']:.1%}")
-            
-            elif idx == 3:  # Restoration
-                if 'enhanced' in st.session_state.results and 'cracks' in st.session_state.results:
-                    st.session_state.results['restored'] = st.session_state.inpainting_gan.inpaint(
-                        st.session_state.results['enhanced'], 
-                        st.session_state.results['cracks']
-                    )
-                    st.markdown("#### ✨ Final Restored Result")
-                    st.image(st.session_state.results['restored'], use_column_width=True)
-                    st.balloons()
-            
-            st.session_state.step += 1
+    col1, col2 = st.columns([3, 1])
+    with col2:
+        if st.button("Run Enhancement", key="btn_enhance"):
+            st.session_state.step_status['enhancement'] = 'processing'
+            st.rerun()
+    
+    if st.session_state.step_status['enhancement'] == 'processing':
+        with st.spinner("Processing enhancement..."):
+            st.session_state.results['enhanced'] = st.session_state.enhancer.enhance_pipeline(img_array)
+            st.session_state.step_status['enhancement'] = 'complete'
             time.sleep(0.5)
             st.rerun()
     
-    # Progress bar
-    progress = (st.session_state.step / len(steps)) * 100
+    if 'enhanced' in st.session_state.results:
+        st.markdown("**Enhanced Result:**")
+        st.image(st.session_state.results['enhanced'], use_container_width=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Step 2: Crack Detection
     st.markdown(f"""
-    <div class="progress-container">
-        <div class="progress-bar" style="width: {progress}%"></div>
+    <div class="step-card {st.session_state.step_status['crack_detection']}">
+        <div class="step-header">
+            <div class="step-title">Step 2: Damage Detection</div>
+            <span class="step-status status-{st.session_state.step_status['crack_detection']}">
+                {st.session_state.step_status['crack_detection'].title()}
+            </span>
+        </div>
+        <div class="step-description">
+            Employs U-Net architecture for precise segmentation of cracks, fractures, and 
+            structural damage across the artifact surface.
+        </div>
     </div>
-    <p style="text-align: center; color: rgba(255,255,255,0.9); font-size: 1.2rem; font-weight: 600; margin-top: 1rem;">
-        {progress:.0f}% Complete • {st.session_state.step}/{len(steps)} Steps Finished
-    </p>
     """, unsafe_allow_html=True)
+    
+    col1, col2 = st.columns([3, 1])
+    with col2:
+        can_run_crack = 'enhanced' in st.session_state.results
+        if st.button("Run Detection", key="btn_crack", disabled=not can_run_crack):
+            st.session_state.step_status['crack_detection'] = 'processing'
+            st.rerun()
+    
+    if st.session_state.step_status['crack_detection'] == 'processing':
+        with st.spinner("Detecting damage..."):
+            enhanced_img = st.session_state.results['enhanced']
+            st.session_state.results['cracks'] = st.session_state.crack_detector.predict(enhanced_img)
+            st.session_state.step_status['crack_detection'] = 'complete'
+            time.sleep(0.5)
+            st.rerun()
+    
+    if 'cracks' in st.session_state.results:
+        crack_vis = cv2.applyColorMap(st.session_state.results['cracks'], cv2.COLORMAP_INFERNO)
+        crack_vis = cv2.cvtColor(crack_vis, cv2.COLOR_BGR2RGB)
+        st.markdown("**Damage Heatmap:**")
+        st.image(crack_vis, use_container_width=True)
+        num_cracks = np.count_nonzero(st.session_state.results['cracks'] > 50)
+        st.info(f"Detected {num_cracks:,} damaged pixels")
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Step 3: Texture Analysis
+    st.markdown(f"""
+    <div class="step-card {st.session_state.step_status['texture_analysis']}">
+        <div class="step-header">
+            <div class="step-title">Step 3: Material Analysis</div>
+            <span class="step-status status-{st.session_state.step_status['texture_analysis']}">
+                {st.session_state.step_status['texture_analysis'].title()}
+            </span>
+        </div>
+        <div class="step-description">
+            Uses ResNet50 transfer learning to classify surface textures and material composition 
+            for informed restoration decisions.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2 = st.columns([3, 1])
+    with col2:
+        can_run_texture = 'enhanced' in st.session_state.results
+        if st.button("Run Analysis", key="btn_texture", disabled=not can_run_texture):
+            st.session_state.step_status['texture_analysis'] = 'processing'
+            st.rerun()
+    
+    if st.session_state.step_status['texture_analysis'] == 'processing':
+        with st.spinner("Analyzing materials..."):
+            enhanced_img = st.session_state.results['enhanced']
+            st.session_state.results['texture'] = st.session_state.texture_classifier.predict(enhanced_img)
+            st.session_state.step_status['texture_analysis'] = 'complete'
+            time.sleep(0.5)
+            st.rerun()
+    
+    if 'texture' in st.session_state.results:
+        result = st.session_state.results['texture']
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Material Type", result['class'].title())
+        with col2:
+            st.metric("Confidence", f"{result['confidence']:.1%}")
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Step 4: Restoration
+    st.markdown(f"""
+    <div class="step-card {st.session_state.step_status['restoration']}">
+        <div class="step-header">
+            <div class="step-title">Step 4: Intelligent Restoration</div>
+            <span class="step-status status-{st.session_state.step_status['restoration']}">
+                {st.session_state.step_status['restoration'].title()}
+            </span>
+        </div>
+        <div class="step-description">
+            Applies advanced inpainting algorithms to reconstruct damaged areas while 
+            preserving authentic textures and historical integrity.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2 = st.columns([3, 1])
+    with col2:
+        can_run_restore = 'enhanced' in st.session_state.results and 'cracks' in st.session_state.results
+        if st.button("Run Restoration", key="btn_restore", disabled=not can_run_restore):
+            st.session_state.step_status['restoration'] = 'processing'
+            st.rerun()
+    
+    if st.session_state.step_status['restoration'] == 'processing':
+        with st.spinner("Restoring artifact..."):
+            st.session_state.results['restored'] = st.session_state.inpainting_gan.inpaint(
+                st.session_state.results['enhanced'],
+                st.session_state.results['cracks']
+            )
+            st.session_state.step_status['restoration'] = 'complete'
+            time.sleep(0.5)
+            st.rerun()
+    
+    if 'restored' in st.session_state.results:
+        st.markdown("**Restored Result:**")
+        st.image(st.session_state.results['restored'], use_container_width=True)
+        
+        # Download
+        restored_pil = Image.fromarray(st.session_state.results['restored'])
+        buf = BytesIO()
+        restored_pil.save(buf, format="PNG")
+        
+        st.download_button(
+            label="Download Restored Image",
+            data=buf.getvalue(),
+            file_name="restored_heritage.png",
+            mime="image/png"
+        )
     
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # Final comparison
-    if st.session_state.step >= len(steps) and 'restored' in st.session_state.results:
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.markdown("### 🎉 Restoration Complete!")
+    # Final Comparison
+    if 'restored' in st.session_state.results:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Comparison View</div>', unsafe_allow_html=True)
         
-        col1, col2 = st.columns(2, gap="large")
+        col1, col2 = st.columns(2)
         with col1:
-            st.markdown("#### 📷 Original Image")
-            st.markdown('<div class="image-container">', unsafe_allow_html=True)
-            st.image(img_array, use_column_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-        
+            st.markdown("**Original**")
+            st.image(img_array, use_container_width=True)
         with col2:
-            st.markdown("#### ✨ Restored Image")
-            st.markdown('<div class="image-container">', unsafe_allow_html=True)
-            st.image(st.session_state.results['restored'], use_column_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Action buttons
-        st.markdown("<br>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns([1, 1, 1])
-        
-        with col2:
-            # Create download button for restored image
-            restored_pil = Image.fromarray(st.session_state.results['restored'])
-            buf = BytesIO()
-            restored_pil.save(buf, format="PNG")
-            
-            st.download_button(
-                label="💾 Download Restored Image",
-                data=buf.getvalue(),
-                file_name="restored_heritage.png",
-                mime="image/png"
-            )
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        # Reset button
-        col1, col2, col3 = st.columns([1, 1, 1])
-        with col2:
-            if st.button("🔄 Process Another Image"):
-                st.session_state.processed = False
-                st.session_state.step = 0
-                st.session_state.results = {}
-                st.rerun()
+            st.markdown("**Restored**")
+            st.image(st.session_state.results['restored'], use_container_width=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
-
-else:
-    st.markdown("""
-    <div class="upload-zone">
-        <h2 style="color: white; margin-bottom: 1rem;">
-            📤 Drop Your Heritage Image Here
-        </h2>
-        <p style="color: rgba(255,255,255,0.8); font-size: 1.2rem; line-height: 1.8;">
-            Upload a heritage artifact image to begin the AI-powered restoration process<br>
-            <span style="font-size: 0.9rem; color: rgba(255,255,255,0.6);">
-                Supported formats: JPG, JPEG, PNG
-            </span>
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-# Footer
-st.markdown("""
-<div style="text-align: center; color: rgba(255,255,255,0.5); padding: 2rem; font-size: 0.9rem;">
-    Made with ❤️ using AI • Heritage Restoration System v2.0
-</div>
-""", unsafe_allow_html=True)
